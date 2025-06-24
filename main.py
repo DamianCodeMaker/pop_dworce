@@ -10,7 +10,6 @@ from ttkthemes import ThemedTk
 import math
 
 
-
 # --- GŁÓWNA KLASA DANYCH ---
 class Entity:
     """Klasa bazowa dla wszystkich obiektów w systemie."""
@@ -29,7 +28,7 @@ class Entity:
                 self.coordinates[0],
                 self.coordinates[1],
                 text=text,
-                font=("Helvetica", 8),  # Zwiększono czcionkę dla lepszej czytelności
+                font=("Helvetica", 8),
                 text_color="white",
                 marker_color_circle="black",
                 marker_color_outside="gray60",
@@ -40,7 +39,7 @@ class Entity:
         if self.marker:
             self.marker.delete()
             self.marker = None
-            self.coordinates = None  # Współrzędne są powiązane z markerem, więc też je czyścimy
+            self.coordinates = None
 
     def show_details(self, marker=None):
         """Metoda wywoływana po kliknięciu znacznika lub przycisku."""
@@ -48,6 +47,7 @@ class Entity:
 
     def __str__(self):
         return self.name
+
 
 class Station(Entity):
     """Przechowuje dane o dworcu kolejowym."""
@@ -59,7 +59,6 @@ class Station(Entity):
         self.carriers = []
 
     def place_marker(self, map_widget, coords):
-        ### ZMIANA: Znacznik dworca pokazuje teraz tylko jego nazwę, bez prefiksu.
         super().place_marker(map_widget, self.name, coords)
 
 
@@ -71,6 +70,7 @@ class Employee(Entity):
         self.position = position
         self.station = station
 
+
 class Carrier(Entity):
     """Przechowuje dane o kliencie (przewoźniku) przypisanym do dworca."""
 
@@ -79,13 +79,14 @@ class Carrier(Entity):
         self.fleet_type = fleet_type
         self.station = station
 
+
 # --- GŁÓWNA KLASA APLIKACJI ---
 class App(ThemedTk):
     def __init__(self):
         super().__init__()
         self.set_theme("arc")
 
-        self.title("Ulepszony System Zarządzania Siecią Dworców")
+        self.title("System Zarządzania Siecią Dworców")
         self.geometry("1500x900")
 
         self.all_stations = []
@@ -177,7 +178,6 @@ class App(ThemedTk):
 
         messagebox.showinfo(title, details)
 
-    ### ZMIANA: Nowa metoda do umieszczania znaczników podrzędnych (pracownik/klient) z przesunięciem
     def _place_entity_offset(self, entity):
         """Umieszcza znacznik dla pracownika/klienta z przesunięciem względem dworca."""
         station = entity.station
@@ -185,28 +185,18 @@ class App(ThemedTk):
             messagebox.showwarning("Brak lokalizacji", f"Dworzec '{station.name}' nie ma współrzędnych na mapie.")
             return
 
-        # Zlicz, ile już jest widocznych znaczników dla tego dworca (oprócz samego dworca)
-        visible_children_count = 0
-        for emp in station.employees:
-            if emp.marker:
-                visible_children_count += 1
-        for car in station.carriers:
-            if car.marker:
-                visible_children_count += 1
+        visible_children_count = sum(1 for emp in station.employees if emp.marker) + \
+                                 sum(1 for car in station.carriers if car.marker)
 
-        # Oblicz przesunięcie, aby znaczniki nie nakładały się na siebie
-        # Można dostosować promień i kąt do własnych preferencji
-        radius = 0.0005 * (1 + (visible_children_count // 8))  # Zwiększ promień co 8 znaczników
-        angle = (visible_children_count * 45) % 360  # Kąt co 45 stopni
+        radius = 0.0005 * (1 + (visible_children_count // 8))
+        angle = (visible_children_count * 45) % 360
         angle_rad = math.radians(angle)
 
-        # Oblicz nowe współrzędne
         lat_offset = radius * math.cos(angle_rad)
         lon_offset = radius * math.sin(angle_rad)
 
         new_coords = [station.coordinates[0] + lat_offset, station.coordinates[1] + lon_offset]
 
-        # Ustal tekst dla znacznika
         if isinstance(entity, Employee):
             text = f"Pracownik:\n{entity.name}"
         elif isinstance(entity, Carrier):
@@ -217,7 +207,7 @@ class App(ThemedTk):
         entity.place_marker(self.map_widget, text, new_coords)
         self.set_status(f"Pokazano na mapie: {entity.name}")
 
-# --- ZAKŁADKA DWORCE ---
+    # --- ZAKŁADKA DWORCE ---
     def create_stations_tab(self):
         tab = ttk.Frame(self.notebook, padding=10)
         self.notebook.add(tab, text="Dworce")
@@ -240,8 +230,10 @@ class App(ThemedTk):
         self.stations_listbox.pack(side=LEFT, fill=BOTH, expand=True)
         btn_frame = ttk.Frame(list_frame)
         btn_frame.pack(side=LEFT, fill=Y, padx=5)
-        ttk.Button(btn_frame, text="Pokaż na Mapie", command=self.focus_on_selected_station).pack(pady=2)
-        ttk.Button(btn_frame, text="Usuń Zaznaczony", command=self.remove_station).pack(pady=2)
+        ttk.Button(btn_frame, text="Pokaż na Mapie", command=self.focus_on_selected_station).pack(pady=2, fill=X)
+        # --- NOWY PRZYCISK ---
+        ttk.Button(btn_frame, text="Edytuj Zaznaczony", command=self.edit_station).pack(pady=2, fill=X)
+        ttk.Button(btn_frame, text="Usuń Zaznaczony", command=self.remove_station).pack(pady=2, fill=X)
 
     def add_station(self):
         name = self.station_name_entry.get()
@@ -257,7 +249,7 @@ class App(ThemedTk):
             return
 
         station = Station(name, address, self)
-        station.place_marker(self.map_widget, coords)  # Znacznik dworca jest umieszczany od razu
+        station.place_marker(self.map_widget, coords)
         self.all_stations.append(station)
         self.map_widget.set_position(coords[0], coords[1], marker=False)
         self.map_widget.set_zoom(16)
@@ -265,6 +257,72 @@ class App(ThemedTk):
         self.refresh_all()
         self.station_name_entry.delete(0, END)
         self.station_address_entry.delete(0, END)
+
+    def edit_station(self):
+        selected_indices = self.stations_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("Brak zaznaczenia", "Proszę wybrać dworzec do edycji.")
+            return
+
+        station_to_edit = self.all_stations[selected_indices[0]]
+        original_address = station_to_edit.address
+
+        # --- Tworzenie okna edycji ---
+        win = Toplevel(self)
+        win.transient(self)
+        win.title("Edytuj Dworzec")
+
+        form = ttk.Frame(win, padding=20)
+        form.pack(expand=True, fill=BOTH)
+
+        ttk.Label(form, text="Nazwa Dworca:").grid(row=0, column=0, sticky=W, padx=5, pady=5)
+        name_entry = ttk.Entry(form, width=40)
+        name_entry.grid(row=0, column=1, sticky=EW, padx=5, pady=5)
+        name_entry.insert(0, station_to_edit.name)
+
+        ttk.Label(form, text="Miasto i/lub Adres:").grid(row=1, column=0, sticky=W, padx=5, pady=5)
+        address_entry = ttk.Entry(form)
+        address_entry.grid(row=1, column=1, sticky=EW, padx=5, pady=5)
+        address_entry.insert(0, station_to_edit.address)
+
+        form.columnconfigure(1, weight=1)
+
+        def _save_edits():
+            new_name = name_entry.get()
+            new_address = address_entry.get()
+            if not new_name or not new_address:
+                messagebox.showerror("Błąd", "Nazwa i adres nie mogą być puste.", parent=win)
+                return
+
+            station_to_edit.name = new_name
+            address_changed = (new_address != original_address)
+
+            if address_changed:
+                full_query = f"{new_name}, {new_address}"
+                new_coords = self.get_coords_from_address(full_query)
+                if not new_coords:
+                    messagebox.showerror("Błąd geolokalizacji",
+                                         f"Nie udało się znaleźć nowej lokalizacji dla: {full_query}", parent=win)
+                    return
+
+                station_to_edit.address = new_address
+                station_to_edit.place_marker(self.map_widget, new_coords)  # Ustawia nowy marker dworca
+
+                # Odśwież pozycje znaczników dzieci, jeśli są widoczne
+                for child in station_to_edit.employees + station_to_edit.carriers:
+                    if child.marker:
+                        child.remove_marker()
+                        self._place_entity_offset(child)
+
+            self.refresh_all()
+            self.set_status(f"Zaktualizowano dworzec: {new_name}")
+            win.destroy()
+
+        btn_frame = ttk.Frame(form)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=15)
+        ttk.Button(btn_frame, text="Zapisz zmiany", command=_save_edits).pack(side=LEFT, padx=5)
+        ttk.Button(btn_frame, text="Anuluj", command=win.destroy).pack(side=LEFT, padx=5)
+        win.grab_set()
 
     def remove_station(self):
         selected = self.stations_listbox.curselection()
@@ -274,19 +332,14 @@ class App(ThemedTk):
                                "Czy na pewno chcesz usunąć ten dworzec i wszystkie powiązane obiekty?"):
             station = self.all_stations[selected[0]]
 
-            # Usuń znaczniki powiązanych obiektów
             for emp in station.employees: emp.remove_marker()
             for car in station.carriers: car.remove_marker()
-
-            # Usuń znacznik samego dworca
             station.remove_marker()
 
-            # Usuń obiekty z list
             self.all_stations.pop(selected[0])
             self.all_employees = [e for e in self.all_employees if e.station != station]
             self.all_carriers = [c for c in self.all_carriers if c.station != station]
 
-            # Odśwież widoki
             self.refresh_all()
             self.set_status(f"Usunięto: {station.name}")
 
@@ -327,10 +380,11 @@ class App(ThemedTk):
         btn_frame = ttk.Frame(list_frame)
         btn_frame.pack(side=LEFT, fill=Y, padx=5)
 
-        ### ZMIANA: Dodano nowy przycisk do pokazywania/ukrywania pracownika na mapie
-        ttk.Button(btn_frame, text="Pokaż/Ukryj na Mapie", command=self.toggle_employee_on_map).pack(pady=2)
-        ttk.Button(btn_frame, text="Pokaż szczegóły", command=self.show_selected_employee_details).pack(pady=2)
-        ttk.Button(btn_frame, text="Usuń Zaznaczonego", command=self.remove_employee).pack(pady=2)
+        ttk.Button(btn_frame, text="Pokaż/Ukryj na Mapie", command=self.toggle_employee_on_map).pack(pady=2, fill=X)
+        ttk.Button(btn_frame, text="Pokaż szczegóły", command=self.show_selected_employee_details).pack(pady=2, fill=X)
+        # --- NOWY PRZYCISK ---
+        ttk.Button(btn_frame, text="Edytuj Zaznaczonego", command=self.edit_employee).pack(pady=2, fill=X)
+        ttk.Button(btn_frame, text="Usuń Zaznaczonego", command=self.remove_employee).pack(pady=2, fill=X)
 
     def add_employee(self):
         name, pos, idx = self.emp_name_entry.get(), self.emp_pos_entry.get(), self.emp_station_combo.current()
@@ -339,9 +393,7 @@ class App(ThemedTk):
             return
         station = self.all_stations[idx]
 
-        ### ZMIANA: Znacznik pracownika nie jest już domyślnie umieszczany na mapie.
         employee = Employee(name, pos, station, self)
-        # employee.place_marker(self.map_widget) # Usunięto tę linię
         self.all_employees.append(employee)
         station.employees.append(employee)
         self.refresh_all()
@@ -349,7 +401,74 @@ class App(ThemedTk):
         self.emp_name_entry.delete(0, END)
         self.emp_pos_entry.delete(0, END)
 
-    ### ZMIANA: Nowa metoda do przełączania widoczności znacznika pracownika
+    def edit_employee(self):
+        selected_indices = self.employees_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("Brak zaznaczenia", "Proszę wybrać pracownika do edycji.")
+            return
+
+        emp_to_edit = self.all_employees[selected_indices[0]]
+
+        win = Toplevel(self)
+        win.transient(self)
+        win.title("Edytuj Pracownika")
+
+        form = ttk.Frame(win, padding=20)
+        form.pack(expand=True, fill=BOTH)
+
+        ttk.Label(form, text="Imię i Nazwisko:").grid(row=0, column=0, sticky=W, padx=5, pady=5)
+        name_entry = ttk.Entry(form, width=40)
+        name_entry.grid(row=0, column=1, sticky=EW, padx=5, pady=5)
+        name_entry.insert(0, emp_to_edit.name)
+
+        ttk.Label(form, text="Stanowisko:").grid(row=1, column=0, sticky=W, padx=5, pady=5)
+        pos_entry = ttk.Entry(form)
+        pos_entry.grid(row=1, column=1, sticky=EW, padx=5, pady=5)
+        pos_entry.insert(0, emp_to_edit.position)
+
+        ttk.Label(form, text="Dworzec macierzysty:").grid(row=2, column=0, sticky=W, padx=5, pady=5)
+        station_combo = ttk.Combobox(form, state="readonly", values=[s.name for s in self.all_stations])
+        station_combo.grid(row=2, column=1, sticky=EW, padx=5, pady=5)
+        station_combo.set(emp_to_edit.station.name)
+
+        form.columnconfigure(1, weight=1)
+
+        def _save_edits():
+            new_name = name_entry.get()
+            new_pos = pos_entry.get()
+            new_station_idx = station_combo.current()
+
+            if not all((new_name, new_pos, new_station_idx != -1)):
+                messagebox.showerror("Błąd", "Wszystkie pola muszą być wypełnione.", parent=win)
+                return
+
+            new_station = self.all_stations[new_station_idx]
+
+            emp_to_edit.name = new_name
+            emp_to_edit.position = new_pos
+
+            # Jeśli zmieniono dworzec
+            if emp_to_edit.station != new_station:
+                # Usuń ze starego dworca
+                emp_to_edit.station.employees.remove(emp_to_edit)
+                # Przypisz i dodaj do nowego
+                emp_to_edit.station = new_station
+                new_station.employees.append(emp_to_edit)
+                # Jeśli pracownik miał znacznik, przenieś go
+                if emp_to_edit.marker:
+                    emp_to_edit.remove_marker()
+                    self._place_entity_offset(emp_to_edit)
+
+            self.refresh_all()
+            self.set_status(f"Zaktualizowano pracownika: {new_name}")
+            win.destroy()
+
+        btn_frame = ttk.Frame(form)
+        btn_frame.grid(row=3, column=0, columnspan=2, pady=15)
+        ttk.Button(btn_frame, text="Zapisz zmiany", command=_save_edits).pack(side=LEFT, padx=5)
+        ttk.Button(btn_frame, text="Anuluj", command=win.destroy).pack(side=LEFT, padx=5)
+        win.grab_set()
+
     def toggle_employee_on_map(self):
         selected = self.employees_listbox.curselection()
         if not selected: return
@@ -371,7 +490,7 @@ class App(ThemedTk):
         selected = self.employees_listbox.curselection()
         if not selected: return
         emp = self.all_employees.pop(selected[0])
-        emp.remove_marker()  # Usuwa znacznik, jeśli istnieje
+        emp.remove_marker()
         emp.station.employees.remove(emp)
         self.refresh_all()
         self.set_status(f"Usunięto: {emp.name}")
@@ -402,10 +521,11 @@ class App(ThemedTk):
         btn_frame = ttk.Frame(list_frame)
         btn_frame.pack(side=LEFT, fill=Y, padx=5)
 
-        ### ZMIANA: Dodano nowy przycisk do pokazywania/ukrywania klienta na mapie
-        ttk.Button(btn_frame, text="Pokaż/Ukryj na Mapie", command=self.toggle_carrier_on_map).pack(pady=2)
-        ttk.Button(btn_frame, text="Pokaż szczegóły", command=self.show_selected_carrier_details).pack(pady=2)
-        ttk.Button(btn_frame, text="Usuń Zaznaczonego", command=self.remove_carrier).pack(pady=2)
+        ttk.Button(btn_frame, text="Pokaż/Ukryj na Mapie", command=self.toggle_carrier_on_map).pack(pady=2, fill=X)
+        ttk.Button(btn_frame, text="Pokaż szczegóły", command=self.show_selected_carrier_details).pack(pady=2, fill=X)
+        # --- NOWY PRZYCISK ---
+        ttk.Button(btn_frame, text="Edytuj Zaznaczonego", command=self.edit_carrier).pack(pady=2, fill=X)
+        ttk.Button(btn_frame, text="Usuń Zaznaczonego", command=self.remove_carrier).pack(pady=2, fill=X)
 
     def add_carrier(self):
         name, fleet, idx = self.carrier_name_entry.get(), self.carrier_fleet_entry.get(), self.carrier_station_combo.current()
@@ -414,9 +534,7 @@ class App(ThemedTk):
             return
         station = self.all_stations[idx]
 
-        ### ZMIANA: Znacznik klienta nie jest już domyślnie umieszczany na mapie.
         carrier = Carrier(name, fleet, station, self)
-        # carrier.place_marker(self.map_widget) # Usunięto tę linię
         self.all_carriers.append(carrier)
         station.carriers.append(carrier)
         self.refresh_all()
@@ -424,7 +542,70 @@ class App(ThemedTk):
         self.carrier_name_entry.delete(0, END)
         self.carrier_fleet_entry.delete(0, END)
 
-    ### ZMIANA: Nowa metoda do przełączania widoczności znacznika klienta
+    def edit_carrier(self):
+        selected_indices = self.carriers_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("Brak zaznaczenia", "Proszę wybrać klienta do edycji.")
+            return
+
+        carrier_to_edit = self.all_carriers[selected_indices[0]]
+
+        win = Toplevel(self)
+        win.transient(self)
+        win.title("Edytuj Klienta")
+
+        form = ttk.Frame(win, padding=20)
+        form.pack(expand=True, fill=BOTH)
+
+        ttk.Label(form, text="Nazwa Przewoźnika:").grid(row=0, column=0, sticky=W, padx=5, pady=5)
+        name_entry = ttk.Entry(form, width=40)
+        name_entry.grid(row=0, column=1, sticky=EW, padx=5, pady=5)
+        name_entry.insert(0, carrier_to_edit.name)
+
+        ttk.Label(form, text="Typ taboru:").grid(row=1, column=0, sticky=W, padx=5, pady=5)
+        fleet_entry = ttk.Entry(form)
+        fleet_entry.grid(row=1, column=1, sticky=EW, padx=5, pady=5)
+        fleet_entry.insert(0, carrier_to_edit.fleet_type)
+
+        ttk.Label(form, text="Dworzec macierzysty:").grid(row=2, column=0, sticky=W, padx=5, pady=5)
+        station_combo = ttk.Combobox(form, state="readonly", values=[s.name for s in self.all_stations])
+        station_combo.grid(row=2, column=1, sticky=EW, padx=5, pady=5)
+        station_combo.set(carrier_to_edit.station.name)
+
+        form.columnconfigure(1, weight=1)
+
+        def _save_edits():
+            new_name = name_entry.get()
+            new_fleet = fleet_entry.get()
+            new_station_idx = station_combo.current()
+
+            if not all((new_name, new_fleet, new_station_idx != -1)):
+                messagebox.showerror("Błąd", "Wszystkie pola muszą być wypełnione.", parent=win)
+                return
+
+            new_station = self.all_stations[new_station_idx]
+
+            carrier_to_edit.name = new_name
+            carrier_to_edit.fleet_type = new_fleet
+
+            if carrier_to_edit.station != new_station:
+                carrier_to_edit.station.carriers.remove(carrier_to_edit)
+                carrier_to_edit.station = new_station
+                new_station.carriers.append(carrier_to_edit)
+                if carrier_to_edit.marker:
+                    carrier_to_edit.remove_marker()
+                    self._place_entity_offset(carrier_to_edit)
+
+            self.refresh_all()
+            self.set_status(f"Zaktualizowano klienta: {new_name}")
+            win.destroy()
+
+        btn_frame = ttk.Frame(form)
+        btn_frame.grid(row=3, column=0, columnspan=2, pady=15)
+        ttk.Button(btn_frame, text="Zapisz zmiany", command=_save_edits).pack(side=LEFT, padx=5)
+        ttk.Button(btn_frame, text="Anuluj", command=win.destroy).pack(side=LEFT, padx=5)
+        win.grab_set()
+
     def toggle_carrier_on_map(self):
         selected = self.carriers_listbox.curselection()
         if not selected: return
@@ -446,7 +627,7 @@ class App(ThemedTk):
         selected = self.carriers_listbox.curselection()
         if not selected: return
         carrier = self.all_carriers.pop(selected[0])
-        carrier.remove_marker()  # Usuwa znacznik, jeśli istnieje
+        carrier.remove_marker()
         carrier.station.carriers.remove(carrier)
         self.refresh_all()
         self.set_status(f"Usunięto: {carrier.name}")
@@ -467,8 +648,10 @@ class App(ThemedTk):
             self.carriers_listbox.insert(END, f"{c.name} [{c.station.name}]")
 
         station_names = [s.name for s in self.all_stations]
-        self.emp_station_combo['values'] = station_names
-        self.carrier_station_combo['values'] = station_names
+        if self.emp_station_combo:
+            self.emp_station_combo['values'] = station_names
+        if self.carrier_station_combo:
+            self.carrier_station_combo['values'] = station_names
 
 
 if __name__ == "__main__":
